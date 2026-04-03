@@ -54,14 +54,17 @@ memory/
 ### 2. Add (추가)
 
 1. Extract from natural language: name, description, deadline
-2. Missing info → **max 1-2 questions**:
-   - No deadline → "마감일 언제로 할까요?"
-   - Vague → "구체적으로 어떤 작업인가요?"
-3. Duplicate check: scan MEMORY-TODO.md for similar names, warn if found
-4. Create `project-{kebab-case-name}.md` with frontmatter
-5. Add one-line entry to MEMORY-TODO.md in correct date section
-6. Create date section if needed: `## YYYY-MM-DD (요일)`
-7. Items without deadline → `## 추후` section
+2. **Default deadline = 오늘 + 7일** (deadline not specified → auto-assign, don't ask)
+3. Only ask about deadline when context suggests urgency matters:
+   - User explicitly mentioned urgency ("급해", "빠르게", "ASAP")
+   - Task is clearly time-sensitive (bug fix, incident response)
+   - Task relates to an external deadline (partner delivery, compliance date)
+4. Vague description → "구체적으로 어떤 작업인가요?" (max 1 question total)
+5. Duplicate check: scan MEMORY-TODO.md for similar names, warn if found
+6. Create `project-{kebab-case-name}.md` with frontmatter
+7. Add one-line entry to MEMORY-TODO.md in correct date section
+8. Create date section if needed: `## YYYY-MM-DD (요일)`
+9. **`## 추후` is only for items where user explicitly says "급하지 않아" or "나중에"**
 
 ### 3. Complete (완료)
 
@@ -77,7 +80,7 @@ memory/
 - Don't delete project files on completion — move to archive/
 - Don't ask more than 2 questions when adding
 - Don't skip duplicate check before adding
-- Deadline-less items always go in `## 추후`
+- Default deadline = 오늘 + 7일. "추후"는 사용자가 명시적으로 "나중에"/"급하지 않아"라고 할 때만
 
 ## First-Time Initialization
 
