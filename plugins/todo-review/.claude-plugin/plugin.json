@@ -1,0 +1,8 @@
+{
+  "name": "todo-review",
+  "version": "1.0.0",
+  "description": "Review todo implementation status via parallel sub-agent investigation — check progress, verify completion, recommend cleanup",
+  "author": {
+    "name": "dokdo2013"
+  }
+}

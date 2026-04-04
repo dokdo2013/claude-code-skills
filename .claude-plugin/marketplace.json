@@ -13,6 +13,11 @@
       "name": "dylabs-devops",
       "source": "./plugins/dylabs-devops",
       "description": "dylabs DevOps runbook — deploy services, manage Terraform, debug Kubernetes, configure monitoring"
+    },
+    {
+      "name": "todo-review",
+      "source": "./plugins/todo-review",
+      "description": "Review todo implementation status via parallel sub-agent investigation — check progress, verify completion, recommend cleanup"
     }
   ]
 }

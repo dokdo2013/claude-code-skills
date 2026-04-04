@@ -8,6 +8,7 @@ Personal Claude Code skills collection, distributed as a plugin marketplace.
 |--------|-------------|
 | **memory-todo** | Memory-based todo management — list, add, complete via natural language (Korean + English) |
 | **dylabs-devops** | dylabs DevOps runbook — deploy services, manage Terraform, debug Kubernetes, configure monitoring |
+| **todo-review** | Review todo implementation status — parallel sub-agent investigation, completion verification, cleanup recommendations |
 
 ## Installation
 
@@ -54,6 +55,14 @@ Todos are stored in `MEMORY-TODO.md` + `project-*.md` files in your project's me
 | "인프라 변경" / "terraform plan" | Terraform workflow with approval gate |
 | "장애 대응" / "debug k8s" | Diagnostic commands for Kubernetes troubleshooting |
 
+### todo-review
+
+| Trigger | Action |
+|---------|--------|
+| "투두 리뷰" / "todo review" | Reviews today+yesterday todos with parallel sub-agents |
+| "어디까지 됐어" / "what's done?" | Checks implementation status of todo items |
+| "상태 확인" / "check status" | Verifies completion, recommends cleanup |
+
 ## Development
 
 ### Local testing
@@ -72,15 +81,18 @@ claude --plugin-dir ./plugins/memory-todo
 
 ```
 claude-code-skills/
-├── marketplace.json                          # Marketplace catalog
+├── .claude-plugin/marketplace.json           # Marketplace catalog
 ├── README.md
 ├── plugins/
 │   ├── memory-todo/
 │   │   ├── .claude-plugin/plugin.json        # Plugin metadata
 │   │   └── skills/memory-todo/SKILL.md       # Skill definition
-│   └── dylabs-devops/
+│   ├── dylabs-devops/
+│   │   ├── .claude-plugin/plugin.json
+│   │   └── skills/dylabs-devops/SKILL.md
+│   └── todo-review/
 │       ├── .claude-plugin/plugin.json
-│       └── skills/dylabs-devops/SKILL.md
+│       └── skills/todo-review/SKILL.md
 └── skills/                                   # Legacy (pre-plugin format)
     ├── memory-todo/SKILL.md
     └── dylabs-devops/SKILL.md
