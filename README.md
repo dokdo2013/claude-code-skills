@@ -1,25 +1,87 @@
 # Claude Code Skills
 
-Personal Claude Code skills collection.
+Personal Claude Code skills collection, distributed as a plugin marketplace.
 
-## Skills
+## Plugins
 
-| Skill | Description |
-|-------|-------------|
-| [memory-todo](skills/memory-todo/SKILL.md) | Memory-based todo management — list, add, complete via natural language |
+| Plugin | Description |
+|--------|-------------|
+| **memory-todo** | Memory-based todo management — list, add, complete via natural language (Korean + English) |
+| **dylabs-devops** | dylabs DevOps runbook — deploy services, manage Terraform, debug Kubernetes, configure monitoring |
 
 ## Installation
 
-Copy skill directories to `~/.claude/skills/`:
+### Add marketplace
 
 ```bash
-cp -r skills/memory-todo ~/.claude/skills/
+/plugin marketplace add dokdo2013/claude-code-skills
+```
+
+### Install a plugin
+
+```bash
+# Todo manager
+/plugin install memory-todo@claude-code-skills
+
+# DevOps runbook (dylabs team only)
+/plugin install dylabs-devops@claude-code-skills
+```
+
+### Verify
+
+```bash
+/plugins
 ```
 
 ## Usage
 
-Once installed, skills are automatically triggered by Claude Code based on conversation context:
+### memory-todo
 
-- "투두 있어?" / "what's on my todo?" → Lists todos
-- "이거 적어둬" / "add this to my todo" → Adds new todo
-- "이거 끝났어" / "mark this done" → Completes todo
+| Trigger | Action |
+|---------|--------|
+| "투두 있어?" / "what's on my todo?" | Lists todos |
+| "이거 적어둬" / "add this to my todo" | Adds new todo |
+| "이거 끝났어" / "mark this done" | Completes todo |
+
+Todos are stored in `MEMORY-TODO.md` + `project-*.md` files in your project's memory directory.
+
+### dylabs-devops
+
+| Trigger | Action |
+|---------|--------|
+| "배포 설정" / "deploy new service" | Walks through the deployment checklist |
+| "모니터링 추가" / "add monitoring" | PrometheusRule + Grafana dashboard setup |
+| "인프라 변경" / "terraform plan" | Terraform workflow with approval gate |
+| "장애 대응" / "debug k8s" | Diagnostic commands for Kubernetes troubleshooting |
+
+## Development
+
+### Local testing
+
+```bash
+claude --plugin-dir ./plugins/memory-todo
+```
+
+### Validate
+
+```bash
+/plugin validate .
+```
+
+## Structure
+
+```
+claude-code-skills/
+├── marketplace.json                          # Marketplace catalog
+├── README.md
+├── plugins/
+│   ├── memory-todo/
+│   │   ├── .claude-plugin/plugin.json        # Plugin metadata
+│   │   └── skills/memory-todo/SKILL.md       # Skill definition
+│   └── dylabs-devops/
+│       ├── .claude-plugin/plugin.json
+│       └── skills/dylabs-devops/SKILL.md
+└── skills/                                   # Legacy (pre-plugin format)
+    ├── memory-todo/SKILL.md
+    └── dylabs-devops/SKILL.md
+```

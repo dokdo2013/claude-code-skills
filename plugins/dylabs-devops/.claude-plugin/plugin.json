@@ -1,0 +1,8 @@
+{
+  "name": "dylabs-devops",
+  "version": "1.0.0",
+  "description": "dylabs DevOps runbook — deploy services, manage Terraform, debug Kubernetes, configure monitoring",
+  "author": {
+    "name": "dokdo2013"
+  }
+}
