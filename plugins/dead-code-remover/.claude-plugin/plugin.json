@@ -1,0 +1,8 @@
+{
+  "name": "dead-code-remover",
+  "version": "1.0.0",
+  "description": "Dead code analysis and safe removal — detect unused imports, functions, types, classes and remove with build/test verification",
+  "author": {
+    "name": "dokdo2013"
+  }
+}

@@ -18,6 +18,16 @@
       "name": "todo-review",
       "source": "./plugins/todo-review",
       "description": "Review todo implementation status via parallel sub-agent investigation — check progress, verify completion, recommend cleanup"
+    },
+    {
+      "name": "side-effect-analyzer",
+      "source": "./plugins/side-effect-analyzer",
+      "description": "Cross-repo side effect analysis — trace upstream/downstream impact of code changes across all services"
+    },
+    {
+      "name": "dead-code-remover",
+      "source": "./plugins/dead-code-remover",
+      "description": "Dead code analysis and safe removal — detect unused imports, functions, types, classes and remove with build/test verification"
     }
   ]
 }

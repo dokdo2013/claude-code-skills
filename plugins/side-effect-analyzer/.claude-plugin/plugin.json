@@ -1,0 +1,8 @@
+{
+  "name": "side-effect-analyzer",
+  "version": "1.0.0",
+  "description": "Cross-repo side effect analysis — trace upstream/downstream impact of code changes across all services",
+  "author": {
+    "name": "dokdo2013"
+  }
+}

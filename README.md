@@ -9,6 +9,8 @@ Personal Claude Code skills collection, distributed as a plugin marketplace.
 | **memory-todo** | Memory-based todo management — list, add, complete via natural language (Korean + English) |
 | **dylabs-devops** | dylabs DevOps runbook — deploy services, manage Terraform, debug Kubernetes, configure monitoring |
 | **todo-review** | Review todo implementation status — parallel sub-agent investigation, completion verification, cleanup recommendations |
+| **side-effect-analyzer** | Cross-repo side effect analysis — trace upstream/downstream impact of code changes across all services |
+| **dead-code-remover** | Dead code analysis and safe removal — detect unused imports, functions, types, classes and remove with build/test verification |
 
 ## Installation
 
@@ -63,6 +65,22 @@ Todos are stored in `MEMORY-TODO.md` + `project-*.md` files in your project's me
 | "어디까지 됐어" / "what's done?" | Checks implementation status of todo items |
 | "상태 확인" / "check status" | Verifies completion, recommends cleanup |
 
+### side-effect-analyzer
+
+| Trigger | Action |
+|---------|--------|
+| "사이드이펙트 점검" / "side effect check" | Analyzes cross-repo impact of current changes |
+| "영향 범위 분석" / "impact analysis" | Greps all repos for changed symbols, dispatches sub-agents |
+| Before commit/PR | Auto-suggests side effect check if not done yet |
+
+### dead-code-remover
+
+| Trigger | Action |
+|---------|--------|
+| "dead code 정리" / "dead code removal" | Full pipeline: detect → confirm → remove → build/test verify |
+| "미사용 코드 삭제" / "unused code cleanup" | Same full pipeline |
+| "안 쓰는 코드 정리" | Same full pipeline |
+
 ## Development
 
 ### Local testing
@@ -90,9 +108,15 @@ claude-code-skills/
 │   ├── dylabs-devops/
 │   │   ├── .claude-plugin/plugin.json
 │   │   └── skills/dylabs-devops/SKILL.md
-│   └── todo-review/
+│   ├── todo-review/
+│   │   ├── .claude-plugin/plugin.json
+│   │   └── skills/todo-review/SKILL.md
+│   ├── side-effect-analyzer/
+│   │   ├── .claude-plugin/plugin.json
+│   │   └── skills/side-effect-analyzer/SKILL.md
+│   └── dead-code-remover/
 │       ├── .claude-plugin/plugin.json
-│       └── skills/todo-review/SKILL.md
+│       └── skills/dead-code-remover/SKILL.md
 └── skills/                                   # Legacy (pre-plugin format)
     ├── memory-todo/SKILL.md
     └── dylabs-devops/SKILL.md
