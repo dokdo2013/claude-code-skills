@@ -7,6 +7,67 @@ description: "Use when deploying new services, configuring monitoring, managing 
 
 dylabs 인프라 배포/모니터링/운영 프로시저.
 
+## ⛔ 직접 CLI가 있으면 우회하지 마라 (CRITICAL)
+
+**아래 CLI가 이미 설치되어 있다. 직접 CLI로 해결할 수 있는 작업을 우회 방법으로 처리하면 안 된다.**
+
+금지 패턴 예시:
+- `vault` CLI 있는데 → `kubectl port-forward` 해서 Vault API 호출 ❌
+- `mysql` CLI 있는데 → Node.js + Prisma로 쿼리 실행 ❌
+- `helm` CLI 있는데 → `kubectl apply`로 수동 매니페스트 적용 ❌
+- `aws` CLI 있는데 → curl로 AWS API 직접 호출 ❌
+- `gh` CLI 있는데 → curl로 GitHub API 호출 ❌
+
+**직접 CLI가 있으면 그걸 써라. 간접 경로로 돌아가지 마라.**
+
+### 인프라 & 클라우드
+
+| CLI | 경로 | 버전 | 용도 |
+|-----|------|------|------|
+| `terraform` | `/opt/homebrew/bin/terraform` | v1.14.2 | IaC — `terraform-main` 리포 전용. tfenv으로 버전 관리 |
+| `aws` | `/usr/local/bin/aws` | 2.32.3 | AWS 리소스 조회/관리 |
+| `session-manager-plugin` | `/opt/homebrew/bin/session-manager-plugin` | 1.2.707.0 | AWS SSM 세션 (EC2 접속, 포트 포워딩) |
+| `kubectl` | `/opt/homebrew/bin/kubectl` | v1.34.2 | K8s 클러스터 관리. kustomize v5.7.1 내장 |
+| `helm` | `/opt/homebrew/bin/helm` | v4.0.0 | Helm chart 관리 |
+| `vault` | `/opt/homebrew/bin/vault` | v1.21.1 | HashiCorp Vault 시크릿 관리 |
+
+### 컨테이너
+
+| CLI | 경로 | 버전 | 용도 |
+|-----|------|------|------|
+| `docker` | `/opt/homebrew/bin/docker.lima` | 29.1.3 | 컨테이너 빌드/실행 (Lima 기반, Docker Desktop 아님) |
+| `docker compose` | docker plugin | v5.0.0 | 로컬 멀티컨테이너 (`docker compose up`) |
+
+### CI/CD & Git
+
+| CLI | 경로 | 버전 | 용도 |
+|-----|------|------|------|
+| `gh` | `/opt/homebrew/bin/gh` | 2.83.1 | GitHub PR/이슈/워크플로우/시크릿 관리 |
+
+### DB 접속 (⛔ SELECT ONLY — 변경 쿼리 절대 금지)
+
+| CLI | 경로 | 버전 | 용도 |
+|-----|------|------|------|
+| `mysql` | `/opt/homebrew/bin/mysql` | 8.0.44 | MySQL/Aurora 접속. **읽기 전용** |
+| `redis-cli` | `/opt/homebrew/bin/redis-cli` | 8.4.0 | Redis 접속. **읽기 전용** |
+
+### 유틸리티
+
+| CLI | 경로 | 버전 | 용도 |
+|-----|------|------|------|
+| `jq` | `/usr/bin/jq` | 1.7.1 | JSON 파싱/필터링 |
+| `rg` | `/opt/homebrew/bin/rg` | 15.1.0 | ripgrep — 코드/설정 파일 검색 |
+| `envsubst` | `/opt/homebrew/bin/envsubst` | GNU 1.0 | 환경변수 치환 (deploy 템플릿 등) |
+| `curl` | `/usr/bin/curl` | 8.7.1 | HTTP 요청/API 호출 |
+
+### 미설치 — 사용 금지
+
+`argocd` (CLI), `stern`, `kubectx`, `kubens`, `kustomize` (standalone), `yq`, `sops`, `skopeo`, `crane`, `istioctl`, `kedactl`, `pulumi`
+
+> ArgoCD는 CLI 없이 `kubectl get app -n argocd` 로 관리. kustomize는 `kubectl` 내장 버전 사용.
+
+---
+
 ## 아키텍처 개요
 
 ### 리포 구조
