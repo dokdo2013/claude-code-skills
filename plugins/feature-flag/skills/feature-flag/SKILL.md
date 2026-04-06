@@ -93,13 +93,15 @@ if (featureFlagManager.isEnabled(FeatureFlag.MY_NEW_FEATURE)) { /* show feature 
 
 1. Flag 생성: key = `my-new-feature`
 2. QA condition: `environment = qa` → 100% rollout
-3. 테스트 후 prod condition 추가
+3. 테스트 후 `environment = production` condition 추가 (줄임말 `prod` 사용 금지)
 
 ## Removing a Flag
 
-1. PostHog 대시보드에서 flag 삭제
-2. 코드에서 flag 분기 제거 (항상 활성화 경로만 남김)
-3. 3개 플랫폼 레지스트리에서 flag 삭제
+**순서가 중요하다.** PostHog 먼저 삭제하면 기존 릴리즈된 앱에서 동작이 변경될 수 있음.
+
+1. 코드에서 flag 분기 제거 (항상 활성화 경로만 남김)
+2. 3개 플랫폼 레지스트리에서 flag 삭제
+3. 배포 완료 후 PostHog 대시보드에서 flag 삭제
 
 ## Evaluation Wrappers (DO NOT call PostHog directly)
 
@@ -111,7 +113,7 @@ if (featureFlagManager.isEnabled(FeatureFlag.MY_NEW_FEATURE)) { /* show feature 
 
 ## Common Mistakes
 
-- **PostHog API 직접 호출** — 항상 래퍼를 통해 사용. 래퍼가 default 처리 + reactivity 보장
+- **PostHog API 직접 호출** — 항상 래퍼를 통해 사용. 래퍼가 reactivity 보장 (단, iOS는 flags 로드 후 PostHog 값만 사용하므로 default는 첫 실행 시에만 적용)
 - **플랫폼별 key 불일치** — 반드시 동일한 kebab-case key 사용
 - **Android에서 revision collect 안 함** — `flagsRevision.collectAsStateWithLifecycle()` 없으면 flag 변경 시 UI 안 바뀜
 - **iOS에서 @ObservedObject 안 씀** — `FeatureFlagManager.shared.isEnabled()` 직접 호출만으로는 SwiftUI 리렌더링 안 됨
