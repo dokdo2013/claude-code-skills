@@ -28,6 +28,11 @@
       "name": "dead-code-remover",
       "source": "./plugins/dead-code-remover",
       "description": "Dead code analysis and safe removal — detect unused imports, functions, types, classes and remove with build/test verification"
+    },
+    {
+      "name": "feature-flag",
+      "source": "./plugins/feature-flag",
+      "description": "Feature flag management across meloming platforms — add, toggle, remove flags consistently across Front/iOS/Android with PostHog"
     }
   ]
 }

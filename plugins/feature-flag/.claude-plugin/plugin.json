@@ -1,0 +1,8 @@
+{
+  "name": "feature-flag",
+  "version": "1.0.0",
+  "description": "Feature flag management across meloming platforms — add, toggle, remove flags consistently across Front/iOS/Android with PostHog",
+  "author": {
+    "name": "dokdo2013"
+  }
+}
