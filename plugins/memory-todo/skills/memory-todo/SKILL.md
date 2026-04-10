@@ -1,6 +1,6 @@
 ---
 name: memory-todo
-description: Use when the user asks about todos, tasks, schedule, deadlines, upcoming work, or says phrases like "what's left", "add to todo", "mark done", "오늘 할 일", "투두", "일정", "마감", "이거 적어둬", "이거 끝났어"
+description: Use when the user asks about todos, tasks, schedule, deadlines, upcoming work, daily tasks, or says phrases like "what's left", "add to todo", "mark done", "오늘 할 일", "투두", "일정", "마감", "이거 적어둬", "이거 끝났어", "데일리", "daily check", "점검", "오늘 점검", "SRE", "시스템 점검"
 ---
 
 # Memory Todo Manager
@@ -15,8 +15,10 @@ digraph when {
   "Intent?" -> "List" [label="투두/일정/할 일 묻기"];
   "Intent?" -> "Add" [label="적어둬/추가/나중에"];
   "Intent?" -> "Complete" [label="끝났어/완료/done"];
+  "Intent?" -> "Daily Check" [label="데일리/점검/daily/SRE"];
   "Intent?" -> "Mixed" [label="불명확"];
   "Mixed" -> "Ask clarification";
+  "List" -> "Auto Daily Check" [label="always"];
 }
 ```
 
@@ -26,6 +28,7 @@ digraph when {
 memory/
   MEMORY.md              # Rules/references only (auto-loaded)
   MEMORY-TODO.md         # Todo index (skill loads on demand)
+  DAILY-TASKS.md         # Daily recurring task definitions + last_run tracking
   project-*.md           # Individual todo details
   archive/               # Completed items
 ```
@@ -84,8 +87,8 @@ Categories: `dev` (개발) | `ops` (운영) | `mkt` (마케팅) | `general` (기
 3. Sort: 오늘 → 기한 초과 → 내일 → 이번 주 → 추후
 4. Output grouped by date with counts
 5. 기한 초과 항목은 **기한 초과** 강조 표시
-6. **카테고리 필터 지원**: "개발 투두", "운영 일정", "마케팅 할 일" 등 카테고리 언급 시 해당 항목만 표시
-6. **Category filter**: if user mentions category ("개발 투두", "운영 일정", "마케팅 할 일"), filter to show only matching items. Category names: 개발=dev, 운영=ops, 마케팅=mkt, 기타=general
+6. **카테고리 필터 지원**: "개발 투두", "운영 일정", "마케팅 할 일" 등 카테고리 언급 시 해당 항목만 표시. Category names: 개발=dev, 운영=ops, 마케팅=mkt, 기타=general
+7. **Daily Task 자동 체크**: 투두 목록 출력 후 DAILY-TASKS.md도 체크하여 미실행 daily task 표시 (상세: Daily Tasks 섹션 참조)
 
 ### 2. Add (추가)
 
@@ -118,6 +121,96 @@ Categories: `dev` (개발) | `ops` (운영) | `mkt` (마케팅) | `general` (기
 - Don't ask more than 2 questions when adding
 - Don't skip duplicate check before adding
 - Default deadline = 오늘 + 7일. "추후"는 사용자가 명시적으로 "나중에"/"급하지 않아"라고 할 때만
+- Daily task 완료 후 last_run 업데이트 잊지 말 것
+- Daily task를 MEMORY-TODO.md에 추가하지 말 것 — DAILY-TASKS.md에서 별도 관리
+
+---
+
+## Daily Tasks (데일리 태스크)
+
+매일 반복 수행하는 작업 관리. DAILY-TASKS.md에 정의된 작업의 `last_run`을 오늘 날짜와 비교하여 미실행 작업을 감지하고 실행을 제안.
+
+### DAILY-TASKS.md Format
+
+```markdown
+# Daily Tasks
+
+## {Task Name}
+- **last_run**: YYYY-MM-DD 또는 never
+- **schedule**: daily | weekday
+- **category**: dev | ops | mkt | general
+
+### Procedure
+1. Step 1 — 구체적 실행 절차
+2. Step 2
+...
+```
+
+- `last_run`: 마지막 실행 날짜. `never`면 한 번도 실행 안 한 것
+- `schedule`: `daily`(매일) 또는 `weekday`(평일만, 토/일 건너뜀)
+- `category`: 투두와 동일한 카테고리 시스템
+- `Procedure`: 실행할 구체적 절차. 다른 스킬(dylabs-devops 등) 참조 가능
+
+### Operation: Daily Check (데일리 체크)
+
+**Trigger**: "데일리", "daily check", "점검", "오늘 점검", "SRE", "시스템 점검" 또는 List 조회 시 자동
+
+```dot
+digraph daily {
+  "Read DAILY-TASKS.md" -> "Parse tasks";
+  "Parse tasks" -> "Check schedule" [label="for each task"];
+  "Check schedule" -> "Skip" [label="weekday + 주말"];
+  "Check schedule" -> "Compare last_run vs today";
+  "Compare last_run vs today" -> "Already done" [label="same date"];
+  "Compare last_run vs today" -> "Suggest execution" [label="different date or never"];
+  "Suggest execution" -> "User confirms" -> "Execute procedure";
+  "Execute procedure" -> "Update last_run to today";
+}
+```
+
+**상세 절차:**
+
+1. **DAILY-TASKS.md 읽기** — 파일 없으면 건너뜀 (에러 아님)
+2. **각 태스크 파싱** — `## {name}`, `last_run`, `schedule`, `category`, `Procedure`
+3. **스케줄 체크**
+   - `weekday`: 오늘이 토/일이면 건너뜀
+   - `daily`: 항상 실행 대상
+4. **last_run vs 오늘 비교**
+   - `last_run` == 오늘 → 이미 완료, 건너뜀
+   - `last_run` < 오늘 또는 `never` → 미실행, 제안
+5. **미실행 태스크 표시**
+   ```
+   ⏰ 오늘 미실행 Daily Task:
+   - [ ] {Task Name} (마지막 실행: {last_run})
+   ```
+6. **사용자가 실행 확인하면** → Procedure 절차 순서대로 실행
+7. **완료 후** → DAILY-TASKS.md의 `last_run`을 오늘 날짜(YYYY-MM-DD)로 업데이트
+
+### Auto-suggest on List
+
+**List(조회) 동작 시 Daily Task 체크를 자동 수행:**
+
+1. 일반 투두 목록 출력
+2. DAILY-TASKS.md 체크
+3. 미실행 daily task가 있으면 투두 목록 하단에 별도 섹션으로 표시:
+   ```
+   ---
+   ⏰ 미실행 Daily Tasks:
+   - [ ] SRE Daily Health Check (마지막: 2026-04-09)
+   ```
+4. 사용자가 실행을 원하면 procedure 수행 → last_run 업데이트
+
+### Adding / Removing Daily Tasks
+
+**추가**: 사용자가 "매일 {task} 해줘", "데일리 태스크 추가" 등 요청 시
+1. DAILY-TASKS.md에 새 섹션 추가 (format 준수)
+2. `last_run: never`, 적절한 `schedule`과 `category` 설정
+3. Procedure는 사용자 설명 기반으로 구체적으로 작성
+
+**제거**: 사용자가 "데일리 {task} 삭제", "더 이상 안 해도 돼" 등 요청 시
+1. DAILY-TASKS.md에서 해당 섹션 전체 삭제
+
+**수정**: Procedure나 schedule 변경 요청 시 해당 필드만 업데이트
 
 ## First-Time Initialization
 
