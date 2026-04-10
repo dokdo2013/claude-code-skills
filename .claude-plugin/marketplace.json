@@ -33,6 +33,11 @@
       "name": "feature-flag",
       "source": "./plugins/feature-flag",
       "description": "Feature flag management across meloming platforms — add, toggle, remove flags consistently across Front/iOS/Android with PostHog"
+    },
+    {
+      "name": "sre-daily-check",
+      "source": "./plugins/sre-daily-check",
+      "description": "SRE daily health check — cluster nodes, pods, Alertmanager alerts, Prometheus metrics, report"
     }
   ]
 }

@@ -1,0 +1,8 @@
+{
+  "name": "sre-daily-check",
+  "version": "1.0.0",
+  "description": "SRE daily health check — cluster nodes, pods, Alertmanager alerts, Prometheus metrics, report",
+  "author": {
+    "name": "dokdo2013"
+  }
+}
