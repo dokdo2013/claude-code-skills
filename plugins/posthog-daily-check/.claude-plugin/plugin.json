@@ -1,0 +1,8 @@
+{
+  "name": "posthog-daily-check",
+  "version": "1.0.0",
+  "description": "PostHog daily product-health check — DAU, exception spikes, rageclick hotspots, feature flag rollout changes, dead tracking detection",
+  "author": {
+    "name": "dokdo2013"
+  }
+}

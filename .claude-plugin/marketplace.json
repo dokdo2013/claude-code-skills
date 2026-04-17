@@ -38,6 +38,11 @@
       "name": "sre-daily-check",
       "source": "./plugins/sre-daily-check",
       "description": "SRE daily health check — cluster nodes, pods, Alertmanager alerts, Prometheus metrics, report"
+    },
+    {
+      "name": "posthog-daily-check",
+      "source": "./plugins/posthog-daily-check",
+      "description": "PostHog daily product-health check — DAU, exception spikes, rageclick hotspots, feature flag rollout changes, dead tracking detection"
     }
   ]
 }

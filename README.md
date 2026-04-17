@@ -11,6 +11,9 @@ Personal Claude Code skills collection, distributed as a plugin marketplace.
 | **todo-review** | Review todo implementation status — parallel sub-agent investigation, completion verification, cleanup recommendations |
 | **side-effect-analyzer** | Cross-repo side effect analysis — trace upstream/downstream impact of code changes across all services |
 | **dead-code-remover** | Dead code analysis and safe removal — detect unused imports, functions, types, classes and remove with build/test verification |
+| **feature-flag** | Feature flag management across meloming platforms — add, toggle, remove flags consistently across Front/iOS/Android with PostHog |
+| **sre-daily-check** | SRE daily health check — cluster nodes, pods, Alertmanager, Prometheus, WAF BLOCK logs, Pod right-sizing |
+| **posthog-daily-check** | PostHog daily product-health check — DAU, exception spikes, rageclick hotspots, feature flag rollout changes, dead tracking detection |
 
 ## Installation
 
@@ -80,6 +83,20 @@ Todos are stored in `MEMORY-TODO.md` + `project-*.md` files in your project's me
 | "dead code 정리" / "dead code removal" | Full pipeline: detect → confirm → remove → build/test verify |
 | "미사용 코드 삭제" / "unused code cleanup" | Same full pipeline |
 | "안 쓰는 코드 정리" | Same full pipeline |
+
+### sre-daily-check
+
+| Trigger | Action |
+|---------|--------|
+| "/sre" / "SRE 점검" / "시스템 점검" | Runs daily infra health check — cluster, alerts, metrics, WAF, pod right-sizing |
+| "클러스터 상태" / "daily health check" | Same workflow |
+
+### posthog-daily-check
+
+| Trigger | Action |
+|---------|--------|
+| "/posthog" / "PostHog 점검" / "제품 지표 점검" | Runs daily product-health check — DAU, exceptions, rageclicks, flag rollouts, dead tracking |
+| "지표 이상 탐지" / "posthog daily check" | Same workflow |
 
 ## Development
 
