@@ -72,7 +72,7 @@ Mirror an existing on-prem app (e.g. `k8s-manifests/clusters/dylabs-onprem-k3s/a
 
 ## Hard constraints
 
-- **Bandwidth: the node has 30 Mbps contracted** (not the 1G NIC). Everything shares it — serving, on-prem<->AWS cross-links, telemetry, image pulls. Migration is bandwidth-budgeted; heavy telemetry (monitoring) stays on EKS. Don't schedule chatty/high-egress workloads here.
+- **Bandwidth: 30 Mbps is the committed *average*, NOT a hard cap — bursts pull the full physical 1G NIC.** The only real constraint is a *sustained, continuous high-throughput stream* whose 24/7 average exceeds the committed rate (e.g. monitoring telemetry ingest ~150 Mbps, continuous bulk replication) — keep those on EKS. Bursty traffic — serving, on-demand queries, DB request/response, image pulls, batch, backup — runs freely on the 1G burst and averages low. So don't co-locate a service that holds a continuous high-bandwidth stream; ordinary bursty workloads are fine.
 - **EKS stays for critical** (meloming front/back, commission, partners, overlay, gateway, clickhouse, chat-worker, RDS/ElastiCache). On-prem = non-core prod + all QA + heavy-common. "amd64 everywhere" is wrong — EKS prod is arm64 Graviton.
 - **Multi-session**: a parallel thread actively owns this migration. Don't bulldoze the shared node/cluster; sequence disruptive rolls (ingress) and preserve its in-flight box state (the `tar` overlay, never `rm -rf`).
 - **Domains**: on-prem = `*.int.sbalyd.com`; AWS keeps `pri.sbalyd.com`. `pri` resolves only inside the VPC/box (verify `pri` from the node, `int` from the tailnet). Never guess domains.
