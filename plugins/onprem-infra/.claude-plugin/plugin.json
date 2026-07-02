@@ -1,0 +1,8 @@
+{
+  "name": "onprem-infra",
+  "version": "1.0.0",
+  "description": "dylabs on-prem k3s infra conventions — git->reconciler apply (Ansible-on-node for platform, ArgoCD for apps), never hand-kubectl; bandwidth + multi-session constraints",
+  "author": {
+    "name": "dokdo2013"
+  }
+}

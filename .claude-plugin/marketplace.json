@@ -15,6 +15,11 @@
       "description": "dylabs DevOps runbook — deploy services, manage Terraform, debug Kubernetes, configure monitoring"
     },
     {
+      "name": "onprem-infra",
+      "source": "./plugins/onprem-infra",
+      "description": "dylabs on-prem k3s infra conventions — git->reconciler apply (Ansible-on-node for platform, ArgoCD for apps), never hand-kubectl; bandwidth + multi-session constraints"
+    },
+    {
       "name": "todo-review",
       "source": "./plugins/todo-review",
       "description": "Review todo implementation status via parallel sub-agent investigation — check progress, verify completion, recommend cleanup"
@@ -43,6 +48,11 @@
       "name": "posthog-daily-check",
       "source": "./plugins/posthog-daily-check",
       "description": "PostHog daily product-health check — DAU, exception spikes, rageclick hotspots, feature flag rollout changes, dead tracking detection"
+    },
+    {
+      "name": "meloming-email",
+      "source": "./plugins/meloming-email",
+      "description": "meloming Bulk Email runbook — campaign send, recipient validation (chunking), NOTICE vs MARKETING (정통망법), branded templates, deliverability, delivery-metric pitfalls"
     }
   ]
 }
