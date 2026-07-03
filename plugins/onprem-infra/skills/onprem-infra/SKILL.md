@@ -70,6 +70,26 @@ Gotchas: box may need `apt install -y ansible` once; if a prior root run left ro
 
 Mirror an existing on-prem app (e.g. `k8s-manifests/clusters/dylabs-onprem-k3s/apps/meloming-docs.yaml`). Multi-source: `devops-helm/charts/backend-app` (chart) + `deploy-gitops/apps/<svc>/onprem/values.yaml` (values: `ingressClassName: nginx`, `cert-manager.io/cluster-issuer: letsencrypt-int`, host `<svc>.int.sbalyd.com`, `imagePullSecrets: [ecr-pull]`, rollout off), destination `meloming-qa`. Commit all repos. The Application object is registered by `kubectl apply`-ing it **on the node** (`cat app.yaml | ssh ... 'kubectl apply -f -'`) — after which ArgoCD **auto-syncs from git**; you do not hand-apply the workload.
 
+## Migration cutover — EKS -> on-prem, the COMPLETE checklist
+
+Deploying the workload on-prem is HALF the job. "It serves HTTP 200" != "it works". Skip a
+step and you ship login-broken apps AND leave EKS double-running. Do EVERY step, IN ORDER.
+
+**Apps are GitOps-managed by the `platform` root-app** (`clusters/dylabs-onprem-k3s/apps/root-app.yaml`, app-of-apps, prune+selfHeal) — add/remove an app file under that dir and ArgoCD reconciles. NEVER `kubectl apply` an App CR by hand (leaves an untracked orphan). EKS apps dir is **kustomize** (edit `kustomization.yaml` too); on-prem is directory-sync (top-level `*.yaml`, no kustomization).
+
+**URL-serving app (admin/front):**
+1. **On-prem up** — backend-app chart + `deploy-gitops/apps/<x>/onprem/values.yaml` (nginx, `letsencrypt-int`, host `<x>.int.sbalyd.com`, `ecr-pull`) + k8s-manifests app file (root-app auto-adopts) + `<x>` CI amd64 (`arc-runner-onprem-amd64`, `:onprem`) + terraform `int_a_records`. Dest `meloming-prod` for prod.
+2. **Backend CORS** — the browser origin becomes `https://<x>.int.sbalyd.com`; it MUST be in the CORS allowlist of EVERY backend the app calls. Mechanisms differ: `CORS_ORIGINS` env merged with a hardcoded default (commission/partners-back) or `CORS_EXTRA_ORIGINS` env merged with a hardcoded static list (meloming-back — prod host-check is exact-match, NO suffix wildcard). Add `.int` via the deploy-gitops backend values (env, no code build). Verify: `curl -X OPTIONS <api> -H "Origin: https://<x>.int.sbalyd.com" -H "Access-Control-Request-Method: GET"` returns `access-control-allow-origin`.
+3. **OAuth redirect URI** — if login is OAuth, register `https://<x>.int.sbalyd.com/<callback>` with the IdP.
+4. **App build config** — NEXT_PUBLIC_* are baked at BUILD (CI vault-action; repoint its url to `https://vault.pri.sbalyd.com` for the on-prem runner). Confirm API base URLs.
+5. **VERIFY IT WORKS** — login + one real action, not just 200. If you can't drive a browser, the operator confirms BEFORE step 6.
+6. **301 redirect (EKS)** — ONLY after 2-5 pass. Change `clusters/dylabs-prod-eks-main/apps/<x>-prod.yaml` source `charts/backend-app` -> `charts/redirect`, inline `valuesObject: {name, fromHost: <x>.dylabs.app, toHost: <x>.int.sbalyd.com, alb: {scheme, groupName, certificateArn}}` (reuse the app's ALB fields from its prod values). KEEP the kustomization entry — change content, don't delete the file (deleting a kustomize-listed file breaks `kustomize build` -> platform ComparisonError freezes ALL prod syncs). Ref: `meloming-business-front-qa.yaml`. Drops EKS pods (compute-free) + 301s the old host.
+7. **Verify cutover** — `curl -I <x>.dylabs.app` -> 301 -> `<x>.int`; `<x>.int` -> 200.
+
+**Cronjob/worker (no URL):** steps 1 (+ ESO secret) + 5 (a Job runs Complete). Cutover = `suspend: true` on the EKS cronjob once the on-prem one succeeds. No CORS/OAuth/301.
+
+**NEVER** push the 301 (step 6) before the on-prem app is verified working — it sends staff to a broken app. **NEVER** leave EKS running after a verified cutover — that's the double-running you were migrating away from.
+
 ## Hard constraints
 
 - **Bandwidth: 30 Mbps is the committed *average*, NOT a hard cap — bursts pull the full physical 1G NIC.** The only real constraint is a *sustained, continuous high-throughput stream* whose 24/7 average exceeds the committed rate (e.g. monitoring telemetry ingest ~150 Mbps, continuous bulk replication) — keep those on EKS. Bursty traffic — serving, on-demand queries, DB request/response, image pulls, batch, backup — runs freely on the 1G burst and averages low. So don't co-locate a service that holds a continuous high-bandwidth stream; ordinary bursty workloads are fine.
