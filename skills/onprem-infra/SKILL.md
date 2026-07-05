@@ -1,6 +1,6 @@
 ---
 name: onprem-infra
-description: "Use when touching the dylabs on-prem k3s cluster — the `dylabs-onprem` kube context, the KoreaIDC bare-metal node, `*.int.sbalyd.com`, the `onprem` Ansible repo, `meloming-qa` on-prem, or migrating a QA/internal service off EKS. Especially when about to `kubectl apply`/`rollout restart`/`helm` against onprem, edit `roles/k3s_platform`, add LimitRanges/resources, or ask 'how do I apply this to onprem'. Triggers: onprem, dylabs-onprem, k3s, int.sbalyd.com, KoreaIDC, 온프렘, 온박스, ansible-playbook."
+description: "Use when touching the dylabs on-prem k3s cluster — the `dylabs-onprem` kube context, the KoreaIDC bare-metal node, `*.int.sbalyd.com`, the `onprem` Ansible repo, `meloming-qa` on-prem, migrating a QA/internal service off EKS, OR serving an external-facing PROD app from on-prem via Cloudflare Tunnel (cloudflared, cfargotunnel). Especially when about to `kubectl apply`/`rollout restart`/`helm` against onprem, edit `roles/k3s_platform`, add LimitRanges/resources, add a public hostname to the cloudflared tunnel, or ask 'how do I apply this to onprem'. Triggers: onprem, dylabs-onprem, k3s, int.sbalyd.com, KoreaIDC, cloudflared, Cloudflare Tunnel, cfargotunnel, 온프렘, 온박스, ansible-playbook."
 ---
 
 # on-prem k3s infra (dylabs)
@@ -89,6 +89,54 @@ step and you ship login-broken apps AND leave EKS double-running. Do EVERY step,
 **Cronjob/worker (no URL):** steps 1 (+ ESO secret) + 5 (a Job runs Complete). Cutover = `suspend: true` on the EKS cronjob once the on-prem one succeeds. No CORS/OAuth/301.
 
 **NEVER** push the 301 (step 6) before the on-prem app is verified working — it sends staff to a broken app. **NEVER** leave EKS running after a verified cutover — that's the double-running you were migrating away from.
+
+## Cloudflare Tunnel — external-facing PROD served from on-prem
+
+The int.sbalyd.com path above is **tailnet-only**. To serve a **public prod domain** (e.g.
+`developers.meloming.com`) from on-prem, use **Cloudflare Tunnel (cloudflared)** — outbound-only, no
+inbound port, no public IP on the node. (Deep dive: memory `project-cloudflare-tunnel-onprem-2026-07-05`.)
+
+**ONE tunnel per cluster, MANY apps (canonical).** The `dylabs-onprem` tunnel
+(`40adc988-514a-41ee-b691-d8adee9a06ec`) serves ALL external prod apps. A new app does **NOT** get a new
+tunnel — add a hostname to the existing cloudflared config ingress:
+`k8s-manifests/clusters/dylabs-onprem-k3s/manifests/cloudflared/cloudflared.yaml` (resources named
+`cloudflared-*`, ns `cloudflared`, ArgoCD `apps/cloudflared.yaml` = directory-sync). Tunnel creds via ESO
+from Vault `onprem/cloudflare/tunnel-*`; the API token (DNS edits) is Vault `onprem/cloudflare/tunnel`
+(field `api_token`, all-zone). **A config change needs a POD RESTART** — updating the ConfigMap alone does
+NOT reload cloudflared; bump a pod annotation, or let a resource rename recreate the pods.
+
+**App deploy (like the int path, but prod dir + tunnel exposure):**
+1. `<app>` repo `deploy-onprem.yml` (workflow_dispatch, `runs-on arc-runner-onprem-amd64`, Vault
+   `https://vault.pri.sbalyd.com`, `--platform linux/amd64`, tag `onprem-<sha>`). workflow_dispatch must be
+   on the DEFAULT (main) branch — if the repo's qa->main PR carries other sessions' work, land ONLY the
+   workflow in an isolated main PR (don't merge the omnibus release PR).
+2. `deploy-gitops/apps/<app>/onprem-prod/values.yaml` — prod dir, ns `meloming-prod`,
+   `ingress.enabled: false` (tunnel exposes it, NOT ingress-nginx), ClusterIP.
+3. `k8s-manifests` ArgoCD app (dest `meloming-prod`) + add the hostname to cloudflared ingress pointing at
+   `http://<svc>.meloming-prod.svc.cluster.local:80`.
+4. **DNS origin flip** (the cutover, replaces the int-path 301): in the Cloudflare zone, host CNAME ->
+   `<tunnel-id>.cfargotunnel.com`, **proxied (orange)**, ttl auto.
+
+**[CRITICAL] Cloudflare free/Pro routes KR traffic to the LAX (US) edge.** Even with the connector in
+Seoul, `cdn-cgi/trace` colo=LAX and latency is ~0.6-1s vs ~46ms origin-direct (15-20x). 1.1.1.1 (DNS) hits
+ICN but the zone PROXY (web) is LAX; only Enterprise+China-network reliably pins the Seoul PoP. So
+tunnel/proxy is a **latency hit for KR-facing apps regardless of connector location** — fine for
+low-traffic/non-critical, weigh it otherwise. (Local browser not seeing CF = system resolver
+cache/propagation — dig @8.8.8.8 vs the connection IP to tell apart — NOT a server problem.)
+
+**EKS teardown after tunnel cutover (do NOT skip — else double-running):** DNS origin is now cfargotunnel,
+so the EKS ALB path is dead — REMOVE the EKS prod app entirely (not a 301):
+- `k8s-manifests/clusters/dylabs-prod-eks-main/apps/<app>-prod.yaml` deleted + its `kustomization.yaml`
+  line removed (comment why) -> ArgoCD prunes EKS pods/svc/ingress/ALB-rule.
+- `deploy-gitops/apps/<app>/prod/values.yaml` (EKS values) removed.
+- `<app>` repo `deploy-prod.yml` (EKS arm64 build CI) removed — prod builds via `deploy-onprem.yml` now.
+- Keep the QA/int path untouched (separate concern). Verify: EKS app NotFound, meloming-prod pods gone,
+  ingress gone, `<host>` still 200 via tunnel.
+
+**Rename/refactor cloudflared with ZERO downtime:** same tunnel ID = connectors coexist. Push the new
+resource set, wait for it Running + serving (200), THEN prune the old — both connect to the one tunnel in
+between, so no gap. (Vault `kv put` is hook-blocked here -> hand a creds-path rename to the operator; the
+Cloudflare tunnel NAME needs an account-scoped token or the dashboard.)
 
 ## Hard constraints
 
