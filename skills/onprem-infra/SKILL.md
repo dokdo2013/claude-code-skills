@@ -56,15 +56,18 @@ tar czf - --no-xattrs --exclude='.git' --exclude='.DS_Store' --exclude='.vault_p
   'tar xzf - -C ~/onprem && ls ~/onprem/inventory/group_vars/all/'   # confirm vault.yml still there
 
 # 3. Run the playbook AS ROOT ON THE NODE (k3s.yml = k3s+platform; site.yml = full, incl. hardening).
-#    The node sudo/become password is operator-supplied — NEVER commit or print it.
-#    (the migration thread feeds it via an expect wrapper: ONPREM_PW env -> `sudo -S bash ...`)
+#    The node sudo/become password is in Vault at
+#    `secret/onprem/node/dylabs-onprem-k3s-1` field `sudo_password`.
+#    Fetch it with `vault kv get -field=sudo_password ...` and feed it only via stdin/env
+#    to `sudo -S`; NEVER commit, print, log, or paste it into chat.
+#    (the migration thread can feed it via an expect wrapper: ONPREM_PW env -> `sudo -S bash ...`)
 #    export LC_ALL=C.UTF-8 LANG=C.UTF-8; cd ~/onprem
 #    ansible-playbook -c local -i inventory/hosts.yml playbooks/k3s.yml
 ```
 
 Gotchas: box may need `apt install -y ansible` once; if a prior root run left root-owned files, `sudo chown -R dylabs ~/onprem` before re-transfer; `LC_ALL=C.UTF-8` is required; the platform HelmCharts are k3s auto-deploy manifests under `/var/lib/rancher/k3s/server/manifests/` — the playbook renders them and the k3s Helm Controller upgrades the releases (rolling the pods **once**).
 
-**If you don't have the node sudo password:** commit + push the git change (that is the durable artifact) and hand the on-node `ansible-playbook` step to the operator. Do **not** substitute local kubectl.
+**If Vault access is unavailable or the node sudo password is missing:** commit + push the git change (that is the durable artifact) and hand the on-node `ansible-playbook` step to the operator. Do **not** substitute local kubectl.
 
 ## Apply path B — app workload (ArgoCD gitops)
 
