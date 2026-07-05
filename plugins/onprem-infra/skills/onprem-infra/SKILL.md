@@ -117,12 +117,13 @@ NOT reload cloudflared; bump a pod annotation, or let a resource rename recreate
 4. **DNS origin flip** (the cutover, replaces the int-path 301): in the Cloudflare zone, host CNAME ->
    `<tunnel-id>.cfargotunnel.com`, **proxied (orange)**, ttl auto.
 
-**[CRITICAL] Cloudflare free/Pro routes KR traffic to the LAX (US) edge.** Even with the connector in
-Seoul, `cdn-cgi/trace` colo=LAX and latency is ~0.6-1s vs ~46ms origin-direct (15-20x). 1.1.1.1 (DNS) hits
-ICN but the zone PROXY (web) is LAX; only Enterprise+China-network reliably pins the Seoul PoP. So
-tunnel/proxy is a **latency hit for KR-facing apps regardless of connector location** — fine for
-low-traffic/non-critical, weigh it otherwise. (Local browser not seeing CF = system resolver
-cache/propagation — dig @8.8.8.8 vs the connection IP to tell apart — NOT a server problem.)
+**[CRITICAL] KR edge (ICN vs LAX) is set by the ZONE's plan + Argo Smart Routing, not the connector.** A
+zone with **Pro plan + Argo Smart Routing (paid) ON** hits the **ICN (Seoul) edge** over CF's backbone:
+`cdn-cgi/trace` colo=ICN, ~33-290ms (near origin-direct 46ms), CF IP 172.66.x (meloming.com). A **free zone
+without Argo hits LAX (US)**: ~0.6-1s, IP 104.21/172.67 (commilog.app). So KR-facing tunnel latency is a
+non-issue on a Pro+Argo zone but a 15-20x hit on free; decide per-zone, and **always measure
+`cdn-cgi/trace` colo+latency after cutover** (IP 172.66=ICN, 104.21/172.67=LAX). (Local browser not seeing
+CF = system resolver cache/propagation, check dig @8.8.8.8; NOT a server problem.)
 
 **EKS teardown after tunnel cutover (do NOT skip — else double-running):** DNS origin is now cfargotunnel,
 so the EKS ALB path is dead — REMOVE the EKS prod app entirely (not a 301):
