@@ -1,416 +1,107 @@
 ---
 name: dylabs-devops
-description: "Use when deploying new services, configuring monitoring, managing Terraform infrastructure, debugging Kubernetes issues, or any DevOps/infrastructure task for dylabs. Triggers on: 배포, 배포 설정, 모니터링, 인프라, Terraform, EKS, ArgoCD, Helm, 신규 서비스 배포, deploy, infra, monitoring, alert, dashboard"
+description: "Operate and change DYLabs infrastructure safely: Kubernetes/EKS/k3s, Argo CD/GitOps, GitHub Actions and container registries, Terraform/AWS, Vault/External Secrets, Cloudflare/Route53/Tailscale networking, monitoring, capacity, migrations, deployments, and incidents. Use for 배포, 배포 설정, 배포 확인, 롤아웃, 인프라, 온프렘/onprem, EKS, k3s, Kubernetes, ArgoCD, GitOps, Helm, GHCR/ECR, Terraform, AWS, Vault, ESO, DNS, Cloudflare Tunnel, Tailscale, 모니터링, 알림, Grafana, Prometheus, Loki, 장애 대응, 비용·용량 최적화, 신규 서비스 배포, deploy, rollout, infra, monitoring, alert, dashboard, SRE, or DevOps work in DYLabs/Meloming systems."
 ---
 
-# dylabs DevOps Runbook
+# DYLabs DevOps
 
-dylabs 인프라 배포/모니터링/운영 프로시저.
+현재 코드·라이브 상태·운영 규칙을 함께 대조해 DYLabs 인프라를 진단하고 변경한다. 환경명이나 과거 메모리만으로 배치 위치와 배포 경로를 추론하지 않는다.
 
-## ⛔ 직접 CLI가 있으면 우회하지 마라 (CRITICAL)
+## 1. 시작 게이트
 
-**아래 CLI가 이미 설치되어 있다. 직접 CLI로 해결할 수 있는 작업을 우회 방법으로 처리하면 안 된다.**
+작업 전에 다음을 순서대로 수행한다.
 
-금지 패턴 예시:
-- `vault` CLI 있는데 → `kubectl port-forward` 해서 Vault API 호출 ❌
-- `mysql` CLI 있는데 → Node.js + Prisma로 쿼리 실행 ❌
-- `helm` CLI 있는데 → `kubectl apply`로 수동 매니페스트 적용 ❌
-- `aws` CLI 있는데 → curl로 AWS API 직접 호출 ❌
-- `gh` CLI 있는데 → curl로 GitHub API 호출 ❌
+1. `/Users/hyeonwoo/DEV/AGENTS.md`와 `/Users/hyeonwoo/DEV/CLAUDE.md`를 읽는다.
+2. 수정하거나 운영 명령을 실행할 각 리포의 `AGENTS.md`와 `CLAUDE.md`를 읽는다. 없는 파일은 첫 업데이트에 명시한다.
+3. Claude memory의 `MEMORY.md`, `critical-rules.md`, `MEMORY-TODO.md`, `DAILY-TASKS.md`와 작업에 관련된 최신 `project-*`, `reference-*`, `feedback-*`를 읽는다.
+4. 리포 상태, 원격 브랜치, 다른 세션 변경을 확인한다. 다른 세션 자산은 삭제·rename·revert·덮어쓰기하지 않는다.
+5. 진단 요청은 읽기 전용으로 끝낸다. 변경 요청만 실제 변경 권한으로 해석한다.
+6. 사용자에게 첫 업데이트로 확인한 리포 규칙, 읽기 전용/변경 범위, 로컬 검증 금지를 알린다.
 
-**직접 CLI가 있으면 그걸 써라. 간접 경로로 돌아가지 마라.**
+## 2. 절대 규칙
 
-### 인프라 & 클라우드
+- 로컬 테스트·빌드·린트·타입체크·패키징·dev/watch 서버·실기기 빌드를 실행하지 않는다. Docker 이미지도 로컬에서 빌드하지 않는다. 원격 CI와 실제 배포 상태로 검증한다.
+- Production DB에는 `SELECT`만 실행한다. QA DB 변경도 사용자 사전 승인을 받는다.
+- `meloming-back` Controller/Service에 PostHog feature flag guard를 추가하지 않는다.
+- 비밀값을 출력, Git 커밋, 대화 인용, shell history 노출하지 않는다. 존재·버전·해시 일치만 검증한다.
+- OnPrem Kubernetes 변경은 Git → reconciler로만 수행한다. `kubectl apply/edit/patch/delete/rollout restart`, 수동 App CR, `helm upgrade`를 사용하지 않는다. P0 또는 사용자 명시 승인 예외도 즉시 소스와 정합성을 복구한다.
+- Terraform `apply`, production 리소스 변경·삭제, 데이터 손실 가능 작업은 정확한 plan과 영향 범위를 제시하고 사용자의 명시 승인을 받은 뒤 수행한다.
+- 임시방편으로 증상을 숨기지 않는다. P0 응급 완화는 임시 조치임을 밝히고 근본 해결을 별도 추적한다.
+- 파일을 변경하면 사용자가 금지하지 않는 한 자신의 변경만 commit/push하고 원격 반영과 해당 CI/rollout을 확인한다.
 
-| CLI | 경로 | 버전 | 용도 |
-|-----|------|------|------|
-| `terraform` | `/opt/homebrew/bin/terraform` | v1.14.2 | IaC — `terraform-main` 리포 전용. tfenv으로 버전 관리 |
-| `aws` | `/usr/local/bin/aws` | 2.32.3 | AWS 리소스 조회/관리 |
-| `session-manager-plugin` | `/opt/homebrew/bin/session-manager-plugin` | 1.2.707.0 | AWS SSM 세션 (EC2 접속, 포트 포워딩) |
-| `kubectl` | `/opt/homebrew/bin/kubectl` | v1.34.2 | K8s 클러스터 관리. kustomize v5.7.1 내장 |
-| `helm` | `/opt/homebrew/bin/helm` | v4.0.0 | Helm chart 관리 |
-| `vault` | `/opt/homebrew/bin/vault` | v1.21.1 | HashiCorp Vault 시크릿 관리 |
+실수로 금지된 로컬 검증 프로세스를 발견하면 즉시 중단하고 보고한다.
 
-### 컨테이너
+## 3. 작업별 reference
 
-| CLI | 경로 | 버전 | 용도 |
-|-----|------|------|------|
-| `docker` | `/opt/homebrew/bin/docker.lima` | 29.1.3 | 컨테이너 빌드/실행 (Lima 기반, Docker Desktop 아님) |
-| `docker compose` | docker plugin | v5.0.0 | 로컬 멀티컨테이너 (`docker compose up`) |
+필요한 reference를 작업 전에 끝까지 읽는다.
 
-### CI/CD & Git
+- 앱 위치, Argo CD 소유권, 클러스터·레지스트리·리포 구조: [references/topology.md](references/topology.md)
+- 신규 서비스, CI, values, Application, 배포·롤아웃 검증: [references/deployment.md](references/deployment.md)
+- Terraform, Vault/ESO, DNS, Tunnel, Tailscale, OnPrem 플랫폼: [references/infrastructure.md](references/infrastructure.md)
+- 모니터링, 용량, 장애 진단, 완료 판정: [references/operations.md](references/operations.md)
 
-| CLI | 경로 | 버전 | 용도 |
-|-----|------|------|------|
-| `gh` | `/opt/homebrew/bin/gh` | 2.83.1 | GitHub PR/이슈/워크플로우/시크릿 관리 |
+여러 영역이면 관련 reference를 모두 읽되, 작업과 무관한 파일은 로드하지 않는다.
 
-### DB 접속 (⛔ SELECT ONLY — 변경 쿼리 절대 금지)
+## 4. 토폴로지 우선 원칙
 
-| CLI | 경로 | 버전 | 용도 |
-|-----|------|------|------|
-| `mysql` | `/opt/homebrew/bin/mysql` | 8.0.44 | MySQL/Aurora 접속. **읽기 전용** |
-| `redis-cli` | `/opt/homebrew/bin/redis-cli` | 8.4.0 | Redis 접속. **읽기 전용** |
+배포·레지스트리·Application·namespace·destination 변경 전 아래 체인을 앱별로 확정한다.
 
-### 유틸리티
+1. live Argo CD Application의 source, values, revision, destination cluster, namespace
+2. live controller와 Pod의 tracking ID, image/digest, replicas, rollout 상태
+3. Ingress, Cloudflare Tunnel, Route53/Cloudflare DNS, private route 등 실제 트래픽 경로
+4. 이미지를 발행하고 활성 GitOps path를 갱신하는 source workflow와 trigger branch
+5. dormant values, 오래된 ReplicaSet/Job, 문서, registry repo는 마지막에 정리할 2차 근거
 
-| CLI | 경로 | 버전 | 용도 |
-|-----|------|------|------|
-| `jq` | `/usr/bin/jq` | 1.7.1 | JSON 파싱/필터링 |
-| `rg` | `/opt/homebrew/bin/rg` | 15.1.0 | ripgrep — 코드/설정 파일 검색 |
-| `envsubst` | `/opt/homebrew/bin/envsubst` | GNU 1.0 | 환경변수 치환 (deploy 템플릿 등) |
-| `curl` | `/usr/bin/curl` | 8.7.1 | HTTP 요청/API 호출 |
+`qa`, `prod`, `onprem`, `onprem-prod`, 브랜치명, 디렉터리명, Argo CD가 실행되는 클러스터만으로 destination을 정하지 않는다. 동일 제어면이 두 클러스터를 관리할 수 있다.
 
-### 미설치 — 사용 금지
+현재 구조의 핵심은 다음과 같지만, 이는 2026-07-21 스냅샷이며 매 작업마다 재검증한다.
 
-`argocd` (CLI), `stern`, `kubectx`, `kubens`, `kustomize` (standalone), `yq`, `sops`, `skopeo`, `crane`, `istioctl`, `kedactl`, `pulumi`
+- Argo CD control plane은 OnPrem에 있고 EKS와 OnPrem destination을 함께 관리한다. EKS 내부 Argo CD control plane은 퇴역했다.
+- DYLabs 애플리케이션 이미지의 기본 registry는 GHCR이다. ECR은 AWS native consumer 등 검증된 예외만 유지한다.
+- OnPrem k3s는 3-node amd64 클러스터다. 별도 standalone 서버를 k3s 노드로 오인하지 않는다.
+- authoritative Vault는 OnPrem 3-node Raft다. EKS Vault StatefulSet은 `0/0` cold source이며 단순 scale-up하지 않는다.
+- EKS ARC runner와 builder NodePool은 퇴역했다. 새 workflow에 ARC label을 재도입하지 않는다.
 
-> ArgoCD는 CLI 없이 `kubectl get app -n argocd` 로 관리. kustomize는 `kubectl` 내장 버전 사용.
+## 5. 실행 원칙
 
----
+### CLI
 
-## 아키텍처 개요
+사용 전 `command -v`와 필요 시 `--version`으로 현재 설치 상태를 확인한다. 과거 경로·버전을 사실로 가정하지 않는다.
 
-### 리포 구조
+- 목적 전용 CLI가 있으면 그 CLI를 사용한다: `terraform`, `aws`, `kubectl`, `helm`, `vault`, `gh`, `mysql`, `redis-cli`.
+- 직접 CLI가 없거나 인증이 없으면 임의 API 우회, port-forward, 앱 런타임을 이용한 대체 접근을 만들지 않는다.
+- `argocd` CLI가 없으면 OnPrem context의 Application CR과 GitOps source로 확인한다.
+- `docker`가 없거나 로컬 빌드가 금지되어도 설치·우회 빌드하지 않는다. CI를 사용한다.
 
-| 리포 | 역할 |
-|------|------|
-| `terraform-main` | IaC (Terraform) — AWS 인프라 전체 관리 |
-| `k8s-manifests` | ArgoCD Application 정의 + kustomization |
-| `deploy-gitops` | 환경별 Helm values (`apps/{service}/{env}/values.yaml`) |
-| `devops-helm` | 공통 Helm charts (`backend-app`, `frontend-app` 등) |
-| `monitoring-gitops` | PrometheusRule, Grafana Dashboard, Alertmanager 설정 |
+### GitOps와 공유 작업
 
-### 배포 플로우
+- push 전 원격 최신 상태와 shared-repo operation을 확인한다. 다른 세션이 같은 Application, values, Terraform state를 소유하면 직렬화한다.
+- Application이 `Unknown`, `ComparisonError`, `Degraded`이거나 operation이 Running이면 공유 root 변경을 멈추고 원인을 확인한다.
+- live patch로 끝내지 않고 source of truth를 수정한다.
+- Application 삭제 전 `.status.resources`, finalizer, Namespace·cluster-scoped·shared resource 소유를 확인한다. Namespace 소유 앱은 한 번에 cascading delete하지 않는다.
 
-```
-git push (service repo)
-  → GitHub Actions CI
-    → Test
-    → Docker build (ARM64) & push to ECR
-    → DB migration (if applicable)
-    → update image tag in deploy-gitops
-    → ArgoCD detects change → auto sync → K8s rollout
-```
+### Terraform
 
-### 주요 인프라
+- 정확한 root, backend config, workspace, state drift를 먼저 확인한다.
+- 저장 plan은 다른 apply 후 stale하다. 승인 직전 최신 코드/state로 다시 plan한다.
+- target은 공유 drift를 숨길 수 있으므로 exact resource 범위와 full-plan 차이를 함께 검토한다.
+- plan 파일, `.terraform` 산출물, lock 임시 변경을 임의 커밋하지 않는다.
 
-| 구성 | 값 |
-|------|-----|
-| EKS Cluster | `dylabs-prod-eks-main` |
-| Region | `ap-northeast-2` (서울) |
-| Node Manager | Karpenter (ARM64, Spot 선호) |
-| IaC | Terraform (S3 remote state + DynamoDB lock) |
-| Secrets | Vault + External Secrets Operator |
-| CI Runner | GitHub ARC (K8s pod, ARM 빌드/클러스터 내부 접근 시) + ubuntu-latest |
+## 6. 완료 판정
 
-### 프론트엔드 배포
+GitHub Actions success, Argo CD `Synced/Healthy`, Deployment desired image 중 하나만으로 “배포 완료”라고 말하지 않는다.
 
-일부 프론트엔드 앱은 **Vercel**을 사용 (git push → Vercel 자동 배포).
-나머지 프론트엔드는 EKS + ArgoCD 배포.
+모두 확인한다.
 
----
-
-## 1. 신규 서비스 배포 설정 (체크리스트)
-
-새 서비스를 처음 배포할 때 따라야 하는 절차.
-
-### Step 1: Terraform으로 ECR 리포지토리 생성
-
-**ECR은 반드시 Terraform으로만 관리.** 수동 AWS CLI 생성 금지.
-
-`terraform-main` 리포에서 ECR 리소스 추가:
-
-```hcl
-module "ecr_{service}" {
-  source   = "./modules/ecr"
-  name     = "{service-name}"
-  env      = var.environment
-  tags     = local.common_tags
-}
-```
-
-```bash
-cd terraform-main
-terraform plan  -var-file=env/prod.tfvars -out=tfplan
-# ⛔ plan 결과를 사용자에게 보여주고 승인 후 apply
-terraform apply tfplan
-```
-
-### Step 2: deploy-gitops에 values.yaml 생성
-
-`deploy-gitops/apps/{service}/{env}/values.yaml` — 환경별로 필요한 데이터:
-
-**공통 필드:**
-- `global.environment`, `global.region`
-- `app.name`, `app.component`
-- `image.repository` (ECR URI), `image.tag`
-- `replicaCount`, `resources` (requests/limits)
-
-**필요에 따라 설정:**
-- `ingress` — ALB 호스트, 인증서, path 라우팅
-- `healthCheck` — liveness/readiness probe
-- `externalSecret` — Vault 경로, 타겟 시크릿명
-- `env` — 환경변수 목록
-- `metrics.serviceMonitor` — Prometheus 메트릭 수집
-
-> **참고**: 기존 서비스의 values.yaml을 참고하여 작성. `devops-helm/charts/backend-app/values.yaml`에서 전체 스키마 확인 가능.
-
-### Step 3: k8s-manifests에 ArgoCD Application 등록
-
-`k8s-manifests/clusters/dylabs-prod-eks-main/apps/` 에 추가:
-
-**필요한 데이터:**
-- Application name (= 서비스명)
-- Helm chart 경로 (`devops-helm/charts/{chart-name}`)
-- values 파일 참조 (`deploy-gitops/apps/{service}/{env}/values.yaml`)
-- 대상 namespace
-- Rollout 사용 시 `ignoreDifferences` 설정
+1. source commit과 remote branch
+2. remote CI 성공과 실제 발행 image/digest
+3. 활성 GitOps values가 올바른 tag/digest를 가리키는지
+4. Application revision, sync, health, operation phase
+5. 실제 Pod 목록에서 이전 이미지 Pod 0, 새 이미지 Ready Pod가 기대 replica 수만큼 존재하는지
+6. 새 Pod의 image/digest, restart, event, 핵심 의존성 오류
+7. 실제 사용자 경로의 DNS/Tunnel/Ingress/HTTP/API 동작
 
-> **참고**: 기존 App YAML을 복사하고 서비스명/namespace/chart 경로만 수정.
+멀티세션 브랜치에서 후속 커밋이 배포됐으면 내 commit이 실행 image SHA의 조상인지 확인한다. tag prefix가 있으면 실제 image 문자열을 먼저 보고 파싱한다. 조회값이 비면 “진행 중”으로 숨기지 말고 query failure로 보고한다.
 
-등록 후 `kustomization.yaml`의 `resources:`에도 추가.
+완료 보고에는 확인한 규칙과 근거, 변경 리포/파일, commit/push/CI/rollout/route 상태, 남은 위험, 로컬 검증을 하지 않은 이유를 포함한다.
 
-### Step 4: CI/CD Workflow 추가
-
-서비스 리포에 `.github/workflows/` 에 QA/Prod 워크플로우 생성.
-
-**필수 Org Secrets** (레포 시크릿 아님, dylabs Org에 이미 설정됨):
-| Secret | 용도 |
-|--------|------|
-| `DEPLOY_GITOPS_TOKEN` | deploy-gitops 리포 접근용 토큰 |
-| `VAULT_ROLE_ID` | Vault 인증 Role ID |
-| `VAULT_SECRET_ID` | Vault 인증 Secret ID |
-| `SLACK_WEBHOOK_URL` | 배포 알림용 Slack Webhook |
-
-**Runner 선택 기준:**
-| Job | Runner | 이유 |
-|-----|--------|------|
-| Test | `ubuntu-latest` | 클러스터 접근 불필요 |
-| Docker build (ARM) | `arc-runner` | ARM64 빌드 필요 |
-| DB migration | `arc-runner` | Vault/클러스터 접근 필요 |
-| deploy-gitops update | `ubuntu-latest` | git push만 하면 됨 |
-
-**워크플로우 구조:**
-
-```yaml
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      # 프로젝트에 맞는 테스트 실행
-      - run: {test-command}
-
-  build-and-push:
-    needs: test
-    runs-on: arc-runner
-    steps:
-      - uses: actions/checkout@v4
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::{account}:role/{irsa-role-name}
-          aws-region: ap-northeast-2
-      - name: Build and push (ARM64)
-        uses: aws-actions/amazon-ecr-login@v2
-        # ... docker buildx build --platform linux/arm64
-
-  migrate:  # Prisma 등 DB migration 필요 시
-    needs: build-and-push
-    runs-on: arc-runner
-    steps:
-      # Vault에서 DB 접속 정보 가져오기
-      # migration 실행
-
-  deploy:
-    needs: [build-and-push, migrate]  # migrate가 없으면 build-and-push만
-    runs-on: ubuntu-latest
-    if: always() && needs.build-and-push.result == 'success' && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped')
-    steps:
-      # deploy-gitops clone → sed image tag → push
-```
-
-**QA와 Prod 모두 동일한 CI 파이프라인을 타야 함.** QA만 수동 이미지 태그 업데이트 금지.
-
-### Step 5: Vault에 시크릿 등록
-
-Vault KV v2 경로: `secret/data/{env}/{namespace}/{service-name}`
-CLI에서는 `secret/{env}/{namespace}/{service-name}` 로 접근 (Vault가 자동으로 `data/` 경로에 매핑).
-
-```bash
-# 값은 stdin이나 파일로 전달하여 shell history 노출 방지
-kubectl exec -n vault vault-0 -- vault kv put secret/{env}/{namespace}/{service-name} -
-# 또는 Vault UI / External Secrets Operator 사용
-```
-
-### Step 6: 배포 확인
-
-```bash
-# ArgoCD sync 상태
-kubectl get application -n argocd {service-name}
-
-# Pod 상태
-kubectl get pods -n {namespace} -l app.kubernetes.io/name={service-name}
-
-# 로그
-kubectl logs -n {namespace} -l app.kubernetes.io/name={service-name} --tail=50
-
-# Ingress
-kubectl get ingress -n {namespace}
-```
-
----
-
-## 2. 일상적 배포 (레퍼런스)
-
-### 일반 배포 (CI 자동)
-
-`main` 브랜치 push → CI 전체 파이프라인 자동 실행 (test → build → deploy).
-
-### 수동 배포 (긴급 핫픽스 등)
-
-deploy-gitops에서 수동으로 이미지 태그 업데이트 후 push:
-
-```bash
-# values.yaml의 tag 필드를 원하는 커밋 SHA로 변경 후 커밋/푸시
-# ArgoCD가 자동 감지하여 sync
-```
-
-### Pod 재시작 (ArgoCD sync와 별개)
-
-ArgoCD는 git 기반이므로 **Git의 values.yaml을 변경하는 것이 정석**. 아래는 긴급 Pod 재시작만 수행:
-
-```bash
-# Pod 재시작 (ArgoCD sync가 아님 — ArgoCD가 drift를 감지하면 되돌릴 수 있음)
-kubectl rollout restart deployment -n {namespace} {deployment-name}
-```
-
-### 배포 상태 확인
-
-```bash
-kubectl get app -n argocd {service-name} -o jsonpath='{.status.health.status}'
-kubectl argo rollouts get rollout -n {namespace} {rollout-name}
-kubectl get events -n {namespace} --sort-by='.lastTimestamp' | tail -20
-```
-
-### Worker 서비스 (KEDA 관리)
-
-ArgoCD 관리가 아닌 Worker는 `deploy-worker.yml`로 직접 배포:
-
-```bash
-# 1. KEDA pause
-kubectl annotate scaledobject -n {namespace} {name} \
-  autoscaling.keda.sh/paused=true --overwrite
-
-# 2. 이미지 업데이트
-kubectl set image deployment -n {namespace} {deployment} {container}={image}:{tag}
-
-# 3. KEDA unpause
-kubectl annotate scaledobject -n {namespace} {name} \
-  autoscaling.keda.sh/paused- --overwrite
-```
-
----
-
-## 3. 모니터링 추가 (체크리스트)
-
-### Step 1: PrometheusRule 추가
-
-`monitoring-gitops/base/rules/{alert-name}.yaml`
-
-**필요한 데이터:**
-- Alert name, PromQL expression, 지속 시간 (`for`)
-- Severity (`warning` / `critical`)
-- Summary/Description annotation
-
-### Step 2: Grafana 대시보드 추가
-
-`monitoring-gitops/base/dashboards/{category}/{name}.yaml`
-
-ConfigMap + `grafana_dashboard: "1"` 라벨로 Grafana가 자동 인식.
-
-카테고리: `infrastructure/`, `application/`, `kubernetes/`
-
-### Step 3: Alertmanager 라우팅
-
-| Severity | Slack Channel | incident.io |
-|----------|--------------|-------------|
-| critical | #alerts-critical | Yes |
-| warning | #alerts-warning | Yes |
-
-### Step 4: ServiceMonitor (필요 시)
-
-values.yaml에서 `metrics.serviceMonitor.enabled: true` 설정, 또는 직접 ServiceMonitor 리소스 생성.
-
-### Step 5: 배포 및 확인
-
-```bash
-# monitoring-gitops push → ArgoCD 자동 sync
-kubectl get prometheusrules -n monitoring
-kubectl get configmaps -n monitoring -l grafana_dashboard=1
-kubectl get alertmanagerconfigs -n monitoring
-```
-
----
-
-## 4. Terraform 인프라 작업 (레퍼런스)
-
-### 작업 절차
-
-```bash
-cd terraform-main
-git pull origin main
-
-# 변경 계획 확인
-terraform plan -var-file=env/{env}.tfvars -out=tfplan
-
-# ⛔ plan 결과를 사용자에게 보여주고 승인 후 apply
-terraform apply tfplan
-
-# 커밋
-git add . && git commit -m "infra: {변경 내용}" && git push origin main
-```
-
-### 네이밍 컨벤션
-
-- 패턴: `{project}-{env}-{resource}-{identifier}`
-- 태그: `Environment`, `Project`, `ManagedBy`, `ResourceType`, `Name`
-
-### 주의사항
-
-- **`terraform apply` 전 반드시 plan 결과를 사용자에게 보여줄 것**
-- **Prod 리소스 삭제/수정은 사용자 확인 필수**
-- ECR, RDS, ElastiCache, VPC, SG, IAM 등 모든 AWS 리소스를 Terraform으로만 관리
-
----
-
-## 5. 장애 대응 (레퍼런스)
-
-### 기본 디버그 명령어
-
-```bash
-# Pod 상태
-kubectl get pods -n {namespace}
-kubectl describe pod -n {namespace} {pod-name}
-
-# 로그
-kubectl logs -n {namespace} {pod-name} --tail=200
-kubectl logs -n {namespace} {pod-name} --previous
-
-# 이벤트
-kubectl get events -n {namespace} --sort-by='.lastTimestamp' | tail -30
-
-# 리소스 사용량
-kubectl top pods -n {namespace}
-kubectl top nodes
-```
-
-### 장애 패턴별 대응
-
-| 증상 | 확인 명령어 | 일반적 원인 |
-|------|------------|------------|
-| CrashLooping | `kubectl logs {pod} --previous` | 앱 에러, config 누락 |
-| OOMKilled | `kubectl describe pod {pod} \| grep -A5 Last` | 메모리 부족 → values에서 limits 증가 |
-| Replicas Mismatch | `kubectl describe deployment {name}` | 스케줄링 실패, 리소스 부족 |
-| ArgoCD Sync 실패 | `kubectl get app -n argocd {name} -o yaml` | values 에러, chart 호환성 |
-| Vault 시크릿 오류 | `kubectl get externalsecret -n {ns}` | Vault 경로/권한 문제 |
