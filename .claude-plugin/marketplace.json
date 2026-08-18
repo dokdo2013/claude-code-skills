@@ -53,6 +53,11 @@
       "name": "meloming-email",
       "source": "./plugins/meloming-email",
       "description": "meloming Bulk Email runbook — campaign send, recipient validation (chunking), NOTICE vs MARKETING (정통망법), branded templates, deliverability, delivery-metric pitfalls"
+    },
+    {
+      "name": "node6-local-deploy",
+      "source": "./plugins/node6-local-deploy",
+      "description": "Node6 hand deploy runbook — CI/Vault are gone, so build locally and ship a Next standalone release to /srv/apps with atomic symlink flip, PM2 restart and health verification"
     }
   ]
 }

@@ -1,0 +1,8 @@
+{
+  "name": "node6-local-deploy",
+  "version": "1.0.0",
+  "description": "Node6 hand deploy runbook — CI/Vault are gone, so build locally and ship a Next standalone release to /srv/apps with atomic symlink flip, PM2 restart and health verification",
+  "author": {
+    "name": "dokdo2013"
+  }
+}

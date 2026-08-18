@@ -1,0 +1,8 @@
+{
+  "name": "meloming-email",
+  "version": "1.0.0",
+  "description": "meloming Bulk Email runbook — campaign send, recipient validation (chunking), NOTICE vs MARKETING, branded templates, deliverability, delivery-metric pitfalls",
+  "author": {
+    "name": "dokdo2013"
+  }
+}

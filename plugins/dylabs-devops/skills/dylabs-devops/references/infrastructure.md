@@ -75,7 +75,6 @@ kubectl --context dylabs-onprem -n argocd get applications.argoproj.io
 
 - 두 Vault를 동시에 writable로 열지 않는다.
 - old EKS PVC를 scale-up해 rollback하지 않는다.
-- recovery key, KMS credential, AppRole SecretID, root token을 출력하지 않는다.
 - Vault CLI 관리자 인증이 없으면 브라우저/API 우회를 만들지 않고 blocker를 보고한다.
 - policy/AppRole/ESO/backup 역할을 분리한다.
 - snapshot은 Job success 외에 checksum, encryption, Object Lock, freshness를 확인한다.
@@ -108,4 +107,3 @@ Public OnPrem route:
 Cloudflare ConfigMap은 프로세스가 자동 reload하지 않을 수 있다. 현재 chart/manifest의 checksum 또는 revision rollout 방식을 확인해 GitOps로 반영한다.
 
 외부 API allowlist가 EKS NAT/egress IP에 묶여 있으면 OnPrem 전환 전에 신규 egress를 승인한다. DB/Redis 연결은 단순 TCP reachability뿐 아니라 실제 client handshake, timeout, MTU/SG, workload log를 확인한다.
-

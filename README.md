@@ -14,6 +14,7 @@ Personal Claude Code skills collection, distributed as a plugin marketplace.
 | **feature-flag** | Feature flag management across meloming platforms — add, toggle, remove flags consistently across Front/iOS/Android with PostHog |
 | **sre-daily-check** | SRE daily health check — cluster nodes, pods, Alertmanager, Prometheus, WAF BLOCK logs, Pod right-sizing |
 | **posthog-daily-check** | PostHog daily product-health check — DAU, exception spikes, rageclick hotspots, feature flag rollout changes, dead tracking detection |
+| **node6-local-deploy** | Node6 hand deploy runbook — CI/Vault are gone, so build locally and ship a Next standalone release to `/srv/apps` with atomic symlink flip, PM2 restart and health verification |
 
 ## Installation
 

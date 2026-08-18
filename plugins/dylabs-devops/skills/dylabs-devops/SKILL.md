@@ -16,14 +16,12 @@ description: "Operate and change DYLabs infrastructure safely: Kubernetes/EKS/k3
 3. Claude memory의 `MEMORY.md`, `critical-rules.md`, `MEMORY-TODO.md`, `DAILY-TASKS.md`와 작업에 관련된 최신 `project-*`, `reference-*`, `feedback-*`를 읽는다.
 4. 리포 상태, 원격 브랜치, 다른 세션 변경을 확인한다. 다른 세션 자산은 삭제·rename·revert·덮어쓰기하지 않는다.
 5. 진단 요청은 읽기 전용으로 끝낸다. 변경 요청만 실제 변경 권한으로 해석한다.
-6. 사용자에게 첫 업데이트로 확인한 리포 규칙, 읽기 전용/변경 범위, 로컬 검증 금지를 알린다.
+6. 사용자에게 첫 업데이트로 확인한 리포 규칙과 읽기 전용/변경 범위를 알린다.
 
 ## 2. 절대 규칙
 
-- 로컬 테스트·빌드·린트·타입체크·패키징·dev/watch 서버·실기기 빌드를 실행하지 않는다. Docker 이미지도 로컬에서 빌드하지 않는다. 원격 CI와 실제 배포 상태로 검증한다.
 - Production DB에는 `SELECT`만 실행한다. QA DB 변경도 사용자 사전 승인을 받는다.
 - `meloming-back` Controller/Service에 PostHog feature flag guard를 추가하지 않는다.
-- 비밀값을 출력, Git 커밋, 대화 인용, shell history 노출하지 않는다. 존재·버전·해시 일치만 검증한다.
 - OnPrem Kubernetes 변경은 Git → reconciler로만 수행한다. `kubectl apply/edit/patch/delete/rollout restart`, 수동 App CR, `helm upgrade`를 사용하지 않는다. P0 또는 사용자 명시 승인 예외도 즉시 소스와 정합성을 복구한다.
 - Terraform `apply`, production 리소스 변경·삭제, 데이터 손실 가능 작업은 정확한 plan과 영향 범위를 제시하고 사용자의 명시 승인을 받은 뒤 수행한다.
 - 임시방편으로 증상을 숨기지 않는다. P0 응급 완화는 임시 조치임을 밝히고 근본 해결을 별도 추적한다.
@@ -69,9 +67,9 @@ description: "Operate and change DYLabs infrastructure safely: Kubernetes/EKS/k3
 사용 전 `command -v`와 필요 시 `--version`으로 현재 설치 상태를 확인한다. 과거 경로·버전을 사실로 가정하지 않는다.
 
 - 목적 전용 CLI가 있으면 그 CLI를 사용한다: `terraform`, `aws`, `kubectl`, `helm`, `vault`, `gh`, `mysql`, `redis-cli`.
-- 직접 CLI가 없거나 인증이 없으면 임의 API 우회, port-forward, 앱 런타임을 이용한 대체 접근을 만들지 않는다.
+- 목적 전용 CLI, API, port-forward, 앱 런타임, 기존 인증 세션 중 작업에 가장 적합한 경로를 선택한다.
 - `argocd` CLI가 없으면 OnPrem context의 Application CR과 GitOps source로 확인한다.
-- `docker`가 없거나 로컬 빌드가 금지되어도 설치·우회 빌드하지 않는다. CI를 사용한다.
+- 로컬 도구와 CI를 상황에 맞게 함께 활용한다.
 
 ### GitOps와 공유 작업
 
@@ -103,5 +101,4 @@ GitHub Actions success, Argo CD `Synced/Healthy`, Deployment desired image 중 �
 
 멀티세션 브랜치에서 후속 커밋이 배포됐으면 내 commit이 실행 image SHA의 조상인지 확인한다. tag prefix가 있으면 실제 image 문자열을 먼저 보고 파싱한다. 조회값이 비면 “진행 중”으로 숨기지 말고 query failure로 보고한다.
 
-완료 보고에는 확인한 규칙과 근거, 변경 리포/파일, commit/push/CI/rollout/route 상태, 남은 위험, 로컬 검증을 하지 않은 이유를 포함한다.
-
+완료 보고에는 확인한 규칙과 근거, 변경 리포/파일, commit/push/CI/rollout/route 상태, 남은 위험과 수행한 검증을 포함한다.
