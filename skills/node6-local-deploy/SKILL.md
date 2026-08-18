@@ -144,14 +144,29 @@ ssh dylabs@100.91.255.63 'sudo -n ln -sfn /srv/apps/<service>/releases/<full-sha
 
 ### 6. Verify before claiming anything
 
-All four must pass:
+All five must pass:
 
 1. `systemctl is-active pm2-app@<service>` → `active`, restart counter not climbing
 2. loopback `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:<port>/api/health` → `200`
 3. `sudo -n readlink /srv/apps/<service>/current` ends with your SHA
-4. public URL returns the expected status **and** the changed behavior is observable
+4. the **running process** points at the new release, not just the symlink:
+   `sudo -n ps -eo args | grep /srv/apps/<service>` must show your SHA in the path
+5. public URL returns the expected status **and** the changed behavior is observable
 
-Do not say "배포 완료" until 1–4 all pass. Then report the release SHA and the rollback SHA.
+Check 4 is not redundant with check 3. PM2 takes its working directory from the
+release's own `ecosystem.config.cjs`, so a release whose config still names the
+previous directory serves old code while the symlink advertises the new SHA.
+Grep the built artifact for something only the new code contains when the change
+is not visible from outside.
+
+A public URL that answers 403 to your `curl` is not necessarily down. The
+meloming.com zone runs bot protection that rejects non-browser clients on some
+hosts, so verify with a real browser before calling a deploy broken, and give CI
+verification steps the release credential held in the GitHub environment. The
+project memory reference on that zone has the exact rule set and credential
+names.
+
+Do not say "배포 완료" until 1–5 all pass. Then report the release SHA and the rollback SHA.
 
 ### Rollback
 
@@ -160,6 +175,52 @@ Point `current` back at the previous release dir and restart. It is one symlink 
 ## Backend deploy
 
 Backends differ: they are **built on Node6** from a full `main` SHA using Node6's own git identity and `corepack pnpm install --frozen-lockfile`, resolving exactly one of `dist/main.js` or `dist/src/main.js`. Their env comes from `/etc/credstore.encrypted/node6-app-env-active-<service>.json` custody, not from a build arg — so backends do **not** need Vault. Never mix host Node 24 native modules with the Node 20 app runtime.
+
+### The release must carry its own `ecosystem.config.cjs`
+
+The unit declares `ConditionPathExists=/srv/apps/<service>/current/ecosystem.config.cjs`.
+A release unpacked from a plain source archive does not contain that file, and the
+next restart is **skipped, not failed** — systemd reports the condition and the
+service stays down. This took `meloming-back` down on 2026-08-18.
+
+Copy it from the previous release, then rewrite `cwd` to the new release path:
+
+```bash
+ssh dylabs@100.91.255.63 'sudo -n cp -p /srv/apps/<service>/releases/<prev-sha>/ecosystem.config.cjs \
+    /srv/apps/<service>/releases/<new-sha>/ecosystem.config.cjs && \
+  sudo -n sed -i "s|<prev-sha>|<new-sha>|g" /srv/apps/<service>/releases/<new-sha>/ecosystem.config.cjs && \
+  sudo -n grep -n cwd /srv/apps/<service>/releases/<new-sha>/ecosystem.config.cjs'
+```
+
+Skipping the `sed` is worse than forgetting the file: the service starts, health
+passes, and PM2 quietly keeps executing the previous release.
+
+### Building a Nest backend on Node6
+
+```bash
+sudo -n -u <service> env PATH=/opt/dylabs/node/v20.20.2/bin:/usr/bin:/bin \
+  COREPACK_ENABLE_DOWNLOAD_PROMPT=0 HOME=/srv/apps/<service> \
+  NODE_OPTIONS=--max-old-space-size=6144 \
+  bash -c 'cd /srv/apps/<service>/releases/<sha> && corepack pnpm install --frozen-lockfile && corepack pnpm exec prisma generate && corepack pnpm build'
+```
+
+Two failures look like broken source but are not:
+
+- Without `prisma generate` first, `nest build` reports thousands of type errors
+  because the generated client types are absent.
+- Without the raised heap, V8 aborts mid-build (`exit 134`) and leaves `dist/`
+  incomplete. The build script's own exit code can still read as success, so
+  check that `dist/main.js` exists and is newer than the build.
+
+### Changing backend environment
+
+The unit loads env through `LoadCredentialEncrypted` at start, so an env change is
+decrypt, merge, reseal, restart, health check, and restore the previous file if the
+service does not come back. Do it with a reconciler that writes a receipt under
+`/var/lib/dylabs-node6-foundation/`, never by hand: a parallel session needs to see
+what changed and why. `onprem` carries both directions for the export client
+(`node6_dlp_export_client_retirement` and `node6_dlp_export_client_activation`) as
+the working example.
 
 ## Preferred path: Ansible, not hand commands
 
@@ -176,4 +237,14 @@ Update `roles/node6_front_staging/defaults/main.yml` with the new revision + art
 - rebuild or patch `.next` inside an existing release
 - add env to the PM2 ecosystem beyond `NODE_ENV`/`HOSTNAME`/`PORT`
 - restart or touch apps you are not deploying
+- flip `current` before the new release has its own `ecosystem.config.cjs` with its own `cwd`
+- treat a green health check as proof the new code is live — check the process path
 - claim completion from CI success or a gitops tag — that pipeline no longer reaches Node6
+
+## Parallel sessions
+
+Another session may deploy the same service while you work. Before flipping, read
+`current` again and confirm your SHA is a descendant of what is live
+(`git merge-base --is-ancestor <live-sha> <your-sha>`). If it is not, rebuild on
+top of the live revision instead of overwriting it. Announce the service you hold,
+the SHA you flipped, and the rollback SHA so the next session can plan around you.
