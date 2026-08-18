@@ -11,7 +11,8 @@ Authoritative context lives in `docs/aws-onprem-shutdown-master-plan-2026-08-16.
 
 ## IRON RULES
 
-1. **Never print secret or env values.** Master plan: "값이 있는 secret은 어떤 source, plan, log, receipt 또는 chat에도 노출하지 않는다." Move values as files (`scp`, `install -m 0600`). Never `cat`, `echo`, or grep them into the transcript — `NEXT_PUBLIC_*` payment client keys count.
+1. **Never print real secrets.** Master plan: "값이 있는 secret은 어떤 source, plan, log, receipt 또는 chat에도 노출하지 않는다." That means server-side credentials — DB passwords, `SHORTY_API_KEY`, Vault/credstore contents. Move those as files (`scp`, `install -m 0600`), never `cat`/`echo` them.
+   **`NEXT_PUBLIC_*` is not in that class.** Next inlines it into the browser bundle, so every visitor already has it — PortOne `storeId`, Toss/Danal/Payple client keys included. Reading and printing them is fine, and since Vault is gone the deployed bundle is the *only* surviving copy. Recover them there (see below) instead of treating them as secrets.
 2. **Check the lease first.** Node6 is worked by parallel sessions under an exact-lease contract. Read-only inspection is always fine; mutating an app you do not own is a fail-stop. Touch only your target service.
 3. **Only the target-eight allowlist may run.** `meloming-back`, `meloming-commission-back`, `meloming-partners-back`, `meloming-front`, `meloming-commission-front`, `meloming-image-worker`, `meloming-id-front`, `dylabs-admin`. Never add a ninth process.
 4. **Production source is `main` only.** The staging contract rejects `qa` refs and QA images. Merge to `main` first; deploy that exact SHA.
@@ -47,9 +48,29 @@ Public edge is Cloudflare → tunnel → these loopback ports. Do not change rou
 
 `deploy-prod.yml` does `Verify Vault over tailnet` then pulls ~30 values from `vault.pri.sbalyd.com` and passes them as `--build-arg`. Vault lived on node3/4/5, which are **permanently shut down**. The step fails with `curl: (28)`, so no new GHCR image exists for any new commit.
 
-Consequence: the frontends' `NEXT_PUBLIC_*` values were **only** in Vault. Node6 env custody (`/etc/credstore.encrypted`, `/var/lib/dylabs-node6-foundation/app-env-custody`) covers **backends only** — frontends bake their values at build time. So a frontend rebuild needs the env reconstituted from an operator-held copy.
+Consequence: the frontends' `NEXT_PUBLIC_*` values were **only** in Vault. Node6 env custody (`/etc/credstore.encrypted`, `/var/lib/dylabs-node6-foundation/app-env-custody`) covers **backends only** — frontends bake their values at build time.
 
-**Do not reverse-extract values out of a deployed bundle into the transcript.** If reconstruction from an artifact is unavoidable, write straight to a `0600` file on the build host and never echo it.
+### Recovering the frontend build env
+
+The deployed release is now the authoritative copy. Next replaced each `process.env.NEXT_PUBLIC_X` with a literal, so read them back out of the bundle:
+
+```bash
+R=/srv/apps/<service>/releases/<sha>
+# API_CONFIG block gives AUTH_API_URL / COMMISSION_API_URL / APP_URL / MAIN_SERVICE_URL
+sudo -n grep -rhoE 'AUTH_API_URL:"[^"]*"[^}]{0,300}' $R/.next/server | head -1
+# payment + analytics literals, with enough context to map each to its provider
+sudo -n grep -rhoE '.{60}(storeId|channelKey|clientKey|merchantId):"[^"]{4,}"' $R/.next/server | sort -u
+```
+
+Key *names* mostly vanish (only a few survive, e.g. `NEXT_PUBLIC_ID_URL` inside `resolveIdServiceUrl`), so map by call-site context, not by name.
+
+Enumerate what you must recover from source, not from guesswork:
+
+```bash
+grep -rhoE 'process\.env\.NEXT_PUBLIC_[A-Z0-9_]+' src/ | sed 's/process.env.//' | sort -u
+```
+
+**Prove the set before shipping.** Rebuild the *currently deployed* SHA with your recovered env and diff the bundle literals against the live release. Match ⇒ the env is right. Mismatch ⇒ stop; a mis-mapped payment key breaks production checkout.
 
 ## Frontend deploy (Next standalone)
 
@@ -65,11 +86,11 @@ Record the current release SHA — that is your rollback target.
 
 ### 2. Build locally at the exact `main` SHA
 
-`next.config.ts` sets `output: "standalone"`. Supply env from a file that never reaches the transcript:
+`next.config.ts` sets `output: "standalone"`. Write the recovered env to `.env.production.local` (it outranks the repo's `.env.local`, which points at prod already):
 
 ```bash
 cd <repo> && git fetch origin main && git checkout <full-sha>
-install -m 0600 /path/to/prod.env .env.production.local   # operator-held, never printed
+install -m 0600 /path/to/prod.env .env.production.local
 pnpm install --frozen-lockfile && pnpm build
 ```
 
@@ -84,8 +105,6 @@ rm -f .env.production.local                                # do not ship build e
 tar -C "$OUT" -I 'zstd -19' -cf <service>-<sha12>-rootfs.tar.zst .
 sha256sum <service>-<sha12>-rootfs.tar.zst
 ```
-
-**Prove the value set before trusting it.** Build the *currently deployed* SHA with the same env file and diff your bundle against the live one. If the literals match, the env is correct; if not, stop — a wrong payment key breaks production checkout.
 
 ### 3. Stage as a new release (does not touch live traffic)
 
